@@ -3,6 +3,7 @@
 #
 #   passo 1   ingestao_feriados → ingestao_data_lake (a noite 2, agora como código)
 #   prompt 1  + conferencia_bronze → medalhao (silver)
+#   prompt 2  + gold no mesmo pipeline → testes_de_qualidade
 
 resources:
   jobs:
@@ -51,3 +52,12 @@ resources:
             - task_key: conferencia_bronze
           pipeline_task:
             pipeline_id: ${resources.pipelines.vertice_medalhao.id}
+
+        # ── 3. os 10 testes: melhor o job falhar do que o diretor ver número errado ──
+        - task_key: testes_de_qualidade
+          depends_on:
+            - task_key: medalhao
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/testes/testes.sql

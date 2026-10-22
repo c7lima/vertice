@@ -14,3 +14,5 @@ resources:
       libraries:
         - glob:
             include: ../src/silver/**
+        - glob:
+            include: ../src/gold/**
