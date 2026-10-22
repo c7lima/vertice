@@ -15,7 +15,7 @@
 # MAGIC muda só o `endpoint_url`.
 # MAGIC
 # MAGIC Os três passos de toda ingestão:
-# MAGIC 1. **extrair** · o `boto3` lista e baixa cada arquivo do bucket `DataLakeVertice`
+# MAGIC 1. **extrair** · o `boto3` lista e baixa cada arquivo do bucket `DatalakeVertice`
 # MAGIC 2. **pousar** · cada arquivo vai para o volume, no mesmo caminho: `/Volumes/lakehouse_vertice/bronze/raw/`
 # MAGIC 3. **carregar** · o mesmo `read_files` de ontem transforma o raw nas 9 tabelas da bronze
 # MAGIC
@@ -50,7 +50,7 @@ for nome in VARIAVEIS:
 faltando = [nome for nome in VARIAVEIS if not os.environ[nome]]
 assert not faltando, f"preencha: {faltando}"      # para aqui se faltar alguma chave
 
-S3_BUCKET = "DataLakeVertice"
+S3_BUCKET = "DatalakeVertice"
 RAW = "/Volumes/lakehouse_vertice/bronze/raw"
 print("ambiente pronto:", os.environ["S3_ENDPOINT"])
 

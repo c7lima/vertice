@@ -1,0 +1,16 @@
+# O medalhão como pipeline DECLARATIVO (Lakeflow Spark Declarative Pipelines).
+#
+# Cada arquivo declara O QUE a tabela é; o Lakeflow lê os FROM, descobre a ordem,
+# roda em paralelo o que dá e desenha o grafo. O schema padrão é a silver.
+
+resources:
+  pipelines:
+    vertice_medalhao:
+      name: vertice_medalhao
+      catalog: ${var.catalog}
+      schema: silver
+      serverless: true
+      photon: true
+      libraries:
+        - glob:
+            include: ../src/silver/**

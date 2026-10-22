@@ -1,5 +1,8 @@
-# This is a Declarative Automation Bundle definition for vertice.
-# See https://docs.databricks.com/dev-tools/bundles/index.html for documentation.
+# Projeto Farol · a Torre de Controle da Vértice Tecnologia.
+#
+# Este bundle nasceu à mão na noite 3 (bundle init + bundle generate do job "Ingestão"
+# da noite 2) e ganha uma camada por prompt. Tudo roda em serverless.
+
 bundle:
   name: vertice
   uuid: fc81105c-a07b-4dbf-a2ae-e9d35a578054
@@ -7,35 +10,37 @@ bundle:
 include:
   - resources/*.yml
 
-# Variable declarations. These variables are assigned in the dev/prod targets below.
+# Catálogo e warehouse em variável: o mesmo código roda em dev e em prod sem editar uma linha.
 variables:
   catalog:
-    description: The catalog to use
-  schema:
-    description: The schema to use
+    description: Catálogo do Unity Catalog onde as três camadas moram (criado na noite 1)
+    default: lakehouse_vertice
+  warehouse_id:
+    description: SQL Warehouse serverless que executa as tarefas SQL
+    default: 5e59f9f92f866a12
+
+  # As chaves do data lake NÃO têm default: o valor fica em
+  # .databricks/bundle/dev/variable-overrides.json, que o .gitignore deixa fora do Git.
+  s3_access_key_id:
+    description: chave do data lake (o valor fica fora do Git)
+  s3_secret_access_key:
+    description: chave do data lake (o valor fica fora do Git)
 
 targets:
   dev:
-    # The default target uses 'mode: development' to create a development copy.
-    # - Deployed resources get prefixed with '[dev my_user_name]'
-    # - Any job schedules and triggers are paused by default.
-    # See also https://docs.databricks.com/dev-tools/bundles/deployment-modes.html.
-    mode: development
     default: true
+    # Sem `mode: development`: ele prefixaria os nomes com [dev usuario] e quebraria
+    # o SQL da noite. Em troca, o agendamento fica pausado em dev.
+    presets:
+      trigger_pause_status: PAUSED
     workspace:
       host: https://dbc-9bc4ba2b-5798.cloud.databricks.com
-    variables:
-      catalog: workspace
-      schema: ${workspace.current_user.short_name}
+
   prod:
     mode: production
     workspace:
       host: https://dbc-9bc4ba2b-5798.cloud.databricks.com
-      # We explicitly deploy to /Workspace/Users/c7lima@gmail.com to make sure we only have a single copy.
       root_path: /Workspace/Users/c7lima@gmail.com/.bundle/${bundle.name}/${bundle.target}
-    variables:
-      catalog: workspace
-      schema: prod
     permissions:
       - user_name: c7lima@gmail.com
         level: CAN_MANAGE

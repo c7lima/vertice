@@ -1,0 +1,53 @@
+# O job do Projeto Farol. Nasceu do job "Ingestão" da noite 2 (bundle generate)
+# e ganha uma tarefa por prompt:
+#
+#   passo 1   ingestao_feriados → ingestao_data_lake (a noite 2, agora como código)
+#   prompt 1  + conferencia_bronze → medalhao (silver)
+
+resources:
+  jobs:
+    vertice_farol:
+      name: vertice_farol
+
+      # Uma execução por vez: duas ao mesmo tempo apagariam a bronze uma da outra.
+      max_concurrent_runs: 1
+      performance_target: PERFORMANCE_OPTIMIZED
+      queue:
+        enabled: true
+
+      tasks:
+        # ── 0. a ingestão da noite 2 ──────────────────────────────────
+        - task_key: ingestao_feriados
+          notebook_task:
+            notebook_path: ../src/ingestao/01_ingestao_api.py
+            source: WORKSPACE
+
+        # As chaves NÃO ficam neste arquivo: são variáveis do bundle (${var.…}).
+        - task_key: ingestao_data_lake
+          depends_on:
+            - task_key: ingestao_feriados
+          notebook_task:
+            notebook_path: ../src/ingestao/02_ingestao_boto3.py
+            source: WORKSPACE
+            base_parameters:
+              S3_ENDPOINT: https://rxaicthszqjspuvsirby.storage.supabase.co/storage/v1/s3
+              AWS_DEFAULT_REGION: us-east-1
+              AWS_ACCESS_KEY_ID: ${var.s3_access_key_id}
+              AWS_SECRET_ACCESS_KEY: ${var.s3_secret_access_key}
+
+        # ── 1. a bronze chegou inteira? ───────────────────────────────
+        - task_key: conferencia_bronze
+          depends_on:
+            - task_key: ingestao_feriados
+            - task_key: ingestao_data_lake
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/conferencia/00-conferencia-bronze.sql
+
+        # ── 2. o medalhão: silver (as 3 ferramentas viram uma) ────────
+        - task_key: medalhao
+          depends_on:
+            - task_key: conferencia_bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.vertice_medalhao.id}
