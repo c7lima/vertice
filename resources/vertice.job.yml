@@ -1,14 +1,24 @@
-# O job do Projeto Farol. Nasceu do job "Ingestão" da noite 2 (bundle generate)
-# e ganha uma tarefa por prompt:
+# O job do Projeto Farol: a Torre inteira, toda segunda às 6h (pausado em dev).
+# Nasceu do job "Ingestão" da noite 2 (bundle generate) e ganhou uma tarefa por prompt.
 #
-#   passo 1   ingestao_feriados → ingestao_data_lake (a noite 2, agora como código)
-#   prompt 1  + conferencia_bronze → medalhao (silver)
-#   prompt 2  + gold no mesmo pipeline → testes_de_qualidade
+#   ingestao_feriados    a API de feriados (BrasilAPI) → bronze.feriados
+#   ingestao_data_lake   o data lake (Supabase Storage via boto3) → volume raw → as 9 tabelas da bronze
+#   conferencia_bronze   as 9 contagens da bronze, ou raise_error (nada roda com meio dado)
+#   medalhao             o pipeline vertice_medalhao: silver (as 3 ferramentas viram uma) e gold (os KPIs)
+#   testes_de_qualidade  os 10 testes da silver e da gold, ou raise_error
+#   status_com_ia        a causa de cada atraso tirada do texto do status (regra + IA + palavra-chave, MERGE)
+#
+# O DAG: as duas ingestões em paralelo → conferência → medalhão → testes e IA em paralelo.
 
 resources:
   jobs:
     vertice_farol:
       name: vertice_farol
+
+      # Toda segunda às 6h, depois do status de sexta. Em dev o preset do databricks.yml pausa.
+      schedule:
+        quartz_cron_expression: "0 0 6 ? * MON"
+        timezone_id: America/Sao_Paulo
 
       # Uma execução por vez: duas ao mesmo tempo apagariam a bronze uma da outra.
       max_concurrent_runs: 1
@@ -16,17 +26,25 @@ resources:
       queue:
         enabled: true
 
+      # Um ambiente serverless só para os dois notebooks de ingestão (o boto3 já vem na
+      # versão 6). Sem ele, cada notebook sobe a própria computação, e o Free Edition
+      # recusou o pipeline logo depois (RESOURCE_EXHAUSTED).
+      environments:
+        - environment_key: padrao
+          spec:
+            environment_version: "6"
+
       tasks:
-        # ── 0. a ingestão da noite 2 ──────────────────────────────────
+        # ── 0. a ingestão da noite 2, as duas em paralelo ─────────────
         - task_key: ingestao_feriados
+          environment_key: padrao
           notebook_task:
             notebook_path: ../src/ingestao/01_ingestao_api.py
             source: WORKSPACE
 
         # As chaves NÃO ficam neste arquivo: são variáveis do bundle (${var.…}).
         - task_key: ingestao_data_lake
-          depends_on:
-            - task_key: ingestao_feriados
+          environment_key: padrao
           notebook_task:
             notebook_path: ../src/ingestao/02_ingestao_boto3.py
             source: WORKSPACE
@@ -46,7 +64,7 @@ resources:
             file:
               path: ../src/conferencia/00-conferencia-bronze.sql
 
-        # ── 2. o medalhão: silver (as 3 ferramentas viram uma) ────────
+        # ── 2. o medalhão: silver e gold no mesmo pipeline ────────────
         - task_key: medalhao
           depends_on:
             - task_key: conferencia_bronze
@@ -61,3 +79,12 @@ resources:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../src/testes/testes.sql
+
+        # ── 4. a IA no texto do status (em paralelo com os testes) ────
+        - task_key: status_com_ia
+          depends_on:
+            - task_key: medalhao
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/ia/status_estruturado.sql
