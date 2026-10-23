@@ -10,6 +10,12 @@ bundle:
 include:
   - resources/*.yml
 
+# O app (minha-torre/) é um bundle próprio, com deploy próprio. Sem isto, o deploy do
+# vertice subiria a pasta inteira do app, com o node_modules.
+sync:
+  exclude:
+    - minha-torre/**
+
 # Catálogo e warehouse em variável: o mesmo código roda em dev e em prod sem editar uma linha.
 variables:
   catalog:
