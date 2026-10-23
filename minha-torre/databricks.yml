@@ -8,6 +8,10 @@ variables:
     description: Default Genie Space ID
   genie_space_name:
     description: Genie Space display name
+  postgres_branch:
+    description: Branch do Lakebase onde mora torre.decisoes (nome completo, de databricks postgres list-branches)
+  postgres_database:
+    description: Database do Lakebase (nome completo, de databricks postgres list-databases)
 
 resources:
   apps:
@@ -33,6 +37,12 @@ resources:
             name: ${var.genie_space_name}
             space_id: ${var.genie_space_id}
             permission: CAN_RUN
+        # a escrita do app: as decisões de realocação, no Lakebase (Postgres)
+        - name: postgres
+          postgres:
+            branch: ${var.postgres_branch}
+            database: ${var.postgres_database}
+            permission: CAN_CONNECT_AND_CREATE
 
 targets:
   default:
@@ -44,3 +54,5 @@ targets:
       sql_warehouse_id: 5e59f9f92f866a12
       genie_space_id: 01f1ce930f2f1f709cdf726e159fab51
       genie_space_name: Farol · Diretoria
+      postgres_branch: projects/minha-torre/branches/production
+      postgres_database: projects/minha-torre/branches/production/databases/databricks-postgres

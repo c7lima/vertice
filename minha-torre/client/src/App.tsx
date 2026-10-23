@@ -11,6 +11,7 @@ import {
 import { Menu } from 'lucide-react';
 import { ProjetosPage } from './pages/projetos/ProjetosPage';
 import { SimuladorPage } from './pages/simulador/SimuladorPage';
+import { DecisoesPage } from './pages/decisoes/DecisoesPage';
 import { GeniePage } from './pages/genie/GeniePage';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -37,6 +38,9 @@ function NavLinks({ className, linkClass, onClick }: { className?: string; linkC
       </NavLink>
       <NavLink to="/simulador" className={linkClass} onClick={onClick}>
         Simulador
+      </NavLink>
+      <NavLink to="/decisoes" className={linkClass} onClick={onClick}>
+        Decisões
       </NavLink>
       <NavLink to="/perguntar" className={linkClass} onClick={onClick}>
         Perguntar
@@ -87,6 +91,7 @@ const router = createBrowserRouter([
     children: [
       { path: '/', element: <ProjetosPage /> },
       { path: '/simulador', element: <SimuladorPage /> },
+      { path: '/decisoes', element: <DecisoesPage /> },
       { path: '/perguntar', element: <GeniePage /> },
     ],
   },

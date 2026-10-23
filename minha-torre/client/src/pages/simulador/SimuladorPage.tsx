@@ -3,6 +3,7 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  Button,
   Card,
   CardContent,
   CardDescription,
@@ -20,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
+  Textarea,
 } from '@databricks/appkit-ui/react';
 import { useMemo, useState } from 'react';
 import { CAUSAS, decimal, indice, mil, num, pct, reais } from '../../lib/dados';
@@ -43,6 +45,10 @@ export function SimuladorPage() {
   const [pessoaId, setPessoaId] = useState<string>('');
   const [destinoId, setDestinoId] = useState<string>('');
   const [horasOnboarding, setHorasOnboarding] = useState<number>(40);
+  // a decisão: a justificativa, o envio e a resposta do servidor
+  const [justificativa, setJustificativa] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState<{ ok: boolean; texto: string } | null>(null);
 
   // a pessoa escolhida (padrão: a que mais custa parada)
   const pessoa = pessoas.data?.find((p) => p.colaborador_id === pessoaId) ?? pessoas.data?.[0];
@@ -83,6 +89,42 @@ export function SimuladorPage() {
   const diasRecuperados = (diasImpacto90 / 90) * 30;
   const mobilizacao = num(horasOnboarding) * num(pessoa.custo_hora);
   const saldo = ociosidadeEvitada - mobilizacao;
+
+  // grava a decisão no Lakebase (POST /api/decisoes), com a conta que está na tela
+  async function decidir(decisao: 'aprovada' | 'recusada') {
+    if (!pessoa || !destino) return;
+    setEnviando(true);
+    setResultado(null);
+    try {
+      const resposta = await fetch('/api/decisoes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projeto_origem: pessoa.projeto_id,
+          projeto_destino: destino.projeto_id,
+          recurso_id: pessoa.colaborador_id,
+          tipo: 'pessoa',
+          decisao,
+          justificativa,
+          horas_recuperadas_mes: Math.round(horasMes * 10) / 10,
+          economia_mes: Math.round(ociosidadeEvitada * 100) / 100,
+          dias_recuperados: Math.round(diasRecuperados * 10) / 10,
+        }),
+      });
+      const corpo = (await resposta.json()) as { id?: number; decisao?: string; usuario?: string; erro?: string };
+      if (resposta.ok) {
+        setResultado({ ok: true, texto: `Decisão nº ${corpo.id} ${corpo.decisao} e registrada por ${corpo.usuario}` });
+        setJustificativa('');
+      } else {
+        setResultado({ ok: false, texto: corpo.erro ?? `O servidor recusou a decisão (${resposta.status})` });
+      }
+    } catch (erro) {
+      setResultado({ ok: false, texto: erro instanceof Error ? erro.message : 'Falha de rede ao gravar a decisão' });
+    } finally {
+      setEnviando(false);
+    }
+  }
+  const podeDecidir = justificativa.trim().length >= 10 && !enviando;
 
   return (
     <div className="space-y-6 w-full max-w-5xl mx-auto">
@@ -185,6 +227,42 @@ export function SimuladorPage() {
               </li>
             </ul>
           </details>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>A decisão</CardTitle>
+          <CardDescription>
+            Aprovar ou recusar grava a decisão no Lakebase, com o seu e-mail e o horário. Ela aparece na tela Decisões.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="justificativa">Justificativa (mínimo de 10 caracteres)</Label>
+            <Textarea
+              id="justificativa"
+              rows={3}
+              maxLength={1000}
+              value={justificativa}
+              onChange={(e) => setJustificativa(e.target.value)}
+              placeholder={`Por que mover ${pessoa.colaborador_id} do ${pessoa.projeto_id} para o ${destino.projeto_id}?`}
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button disabled={!podeDecidir} onClick={() => void decidir('aprovada')}>
+              Aprovar
+            </Button>
+            <Button variant="outline" disabled={!podeDecidir} onClick={() => void decidir('recusada')}>
+              Recusar
+            </Button>
+          </div>
+          {resultado && (
+            <Alert variant={resultado.ok ? 'default' : 'destructive'}>
+              <AlertTitle>{resultado.ok ? 'Decisão registrada' : 'A decisão não foi gravada'}</AlertTitle>
+              <AlertDescription>{resultado.texto}</AlertDescription>
+            </Alert>
+          )}
         </CardContent>
       </Card>
     </div>
