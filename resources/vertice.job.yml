@@ -7,8 +7,12 @@
 #   medalhao             o pipeline vertice_medalhao: silver (as 3 ferramentas viram uma) e gold (os KPIs)
 #   testes_de_qualidade  os 10 testes da silver e da gold, ou raise_error
 #   status_com_ia        a causa de cada atraso tirada do texto do status (regra + IA + palavra-chave, MERGE)
+#   ml_features          noite 4: as features do modelo (projeto × semana, só olhando para trás)
+#   ml_modelo            noite 4: baselines, treino, testes e o registro @prod no Unity Catalog
+#   ml_score             noite 4: a lista de segunda-feira (gold.score_estouro_30d, com os motivos)
 #
-# O DAG: as duas ingestões em paralelo → conferência → medalhão → testes e IA em paralelo.
+# O DAG: as duas ingestões em paralelo → conferência → medalhão → testes e IA em paralelo
+#        → ml_features → ml_modelo → ml_score.
 
 resources:
   jobs:
@@ -88,3 +92,31 @@ resources:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../src/ia/status_estruturado.sql
+
+        # ── noite 4 · o modelo: o que vai dar errado no próximo mês ───
+        - task_key: ml_features
+          depends_on:
+            - task_key: testes_de_qualidade
+            - task_key: status_com_ia
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/ml/01-features.sql
+
+        - task_key: ml_modelo
+          depends_on:
+            - task_key: ml_features
+          notebook_task:
+            notebook_path: ../src/ml/02-modelo.py
+            source: WORKSPACE
+            base_parameters:
+              catalog: ${var.catalog}
+
+        - task_key: ml_score
+          depends_on:
+            - task_key: ml_modelo
+          notebook_task:
+            notebook_path: ../src/ml/03-score.py
+            source: WORKSPACE
+            base_parameters:
+              catalog: ${var.catalog}
