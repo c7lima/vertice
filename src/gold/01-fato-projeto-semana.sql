@@ -38,7 +38,8 @@ com_status AS (
     ON st.projeto_id = s.projeto_id AND st.data_status = s.semana
 ),
 
--- custo real acumulado: tudo que foi lançado até aquela semana
+-- custo real acumulado: tudo que foi lançado até aquela semana (pela semana do custo,
+-- a mesma sexta da silver.custos)
 custo_acumulado AS (
   SELECT
     s.projeto_id,
@@ -46,7 +47,7 @@ custo_acumulado AS (
     coalesce(SUM(c.valor), 0) AS ac
   FROM semanas s
   LEFT JOIN custos c
-    ON c.projeto_id = s.projeto_id AND c.data <= s.semana
+    ON c.projeto_id = s.projeto_id AND c.semana <= s.semana
   GROUP BY s.projeto_id, s.semana
 ),
 
@@ -54,11 +55,26 @@ horas_da_semana AS (
   SELECT
     projeto_id,
     semana,
-    SUM(horas_disponiveis)                   AS horas_disponiveis,
-    SUM(horas_apontadas)                     AS horas_apontadas,
-    SUM(horas_disponiveis - horas_apontadas) AS horas_ociosas
+    SUM(horas_disponiveis)                               AS horas_disponiveis,
+    SUM(horas_apontadas)                                 AS horas_apontadas,
+    greatest(SUM(horas_disponiveis) - SUM(horas_apontadas), 0) AS horas_ociosas
   FROM apontamentos
   GROUP BY projeto_id, semana
+),
+
+-- PV: quanto do orçamento já deveria estar feito naquela sexta. Tarefa a tarefa, pesado
+-- pelas horas: cada tarefa conta pela fração do SEU baseline que já passou. É a curva
+-- planejada do projeto (devagar no começo, rápida no meio), não uma rampa reta.
+fracao_planejada AS (
+  SELECT
+    s.projeto_id,
+    s.semana,
+    SUM(t.horas * greatest(0, least(1,
+          datediff(s.semana, t.inicio_baseline) / greatest(1, datediff(t.fim_baseline, t.inicio_baseline)))))
+      / SUM(t.horas) AS fracao
+  FROM semanas s
+  JOIN tarefas t ON t.projeto_id = s.projeto_id
+  GROUP BY s.projeto_id, s.semana
 ),
 
 kpis AS (
@@ -66,19 +82,18 @@ kpis AS (
     cs.projeto_id,
     cs.semana,
     cs.orcamento,
-    -- PV: quanto do orçamento já deveria estar feito, pela fração do baseline decorrida
-    CAST(cs.orcamento * greatest(0, least(1,
-      try_divide(datediff(cs.semana, cs.data_inicio), datediff(cs.data_fim_baseline, cs.data_inicio))
-    )) AS DECIMAL(18,2))                                    AS pv,
+    cs.orcamento * fp.fracao                         AS pv_bruto,
     -- EV: quanto do orçamento está feito, pelo % do status daquela sexta
-    CAST(cs.orcamento * coalesce(cs.pct_concluido, 0) / 100 AS DECIMAL(18,2)) AS ev,
+    cs.orcamento * coalesce(cs.pct_concluido, 0) / 100 AS ev_bruto,
     ca.ac,
     cs.pct_concluido,
     cs.farol_do_gerente,
-    h.horas_disponiveis,
-    h.horas_apontadas,
-    h.horas_ociosas
+    coalesce(h.horas_disponiveis, 0)                 AS horas_disponiveis,
+    coalesce(h.horas_apontadas, 0)                   AS horas_apontadas,
+    coalesce(h.horas_ociosas, 0)                     AS horas_ociosas
   FROM com_status cs
+  JOIN fracao_planejada fp
+    ON fp.projeto_id = cs.projeto_id AND fp.semana = cs.semana
   JOIN custo_acumulado ca
     ON ca.projeto_id = cs.projeto_id AND ca.semana = cs.semana
   LEFT JOIN horas_da_semana h
@@ -89,13 +104,14 @@ SELECT
   projeto_id,
   semana,
   orcamento,
-  pv,
-  ev,
+  CAST(pv_bruto AS DECIMAL(18,2))                       AS pv,
+  CAST(ev_bruto AS DECIMAL(18,2))                       AS ev,
   ac,
-  round(try_divide(ev, pv), 4)                         AS spi,
-  round(try_divide(ev, ac), 4)                         AS cpi,
-  CAST(try_divide(orcamento, round(try_divide(ev, ac), 4)) AS DECIMAL(18,2)) AS eac,
-  pct_concluido,
+  -- os índices saem dos valores sem arredondar (4 casas no fim)
+  round(try_divide(ev_bruto, pv_bruto), 4)              AS spi,
+  round(try_divide(ev_bruto, ac), 4)                    AS cpi,
+  CAST(try_divide(orcamento, try_divide(ev_bruto, ac)) AS DECIMAL(18,2)) AS eac,
+  coalesce(pct_concluido, 0)                            AS pct_concluido,   -- antes do 1º status, 0%
   farol_do_gerente,
   horas_disponiveis,
   horas_apontadas,
