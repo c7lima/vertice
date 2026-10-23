@@ -1,0 +1,18 @@
+# O Genie Agent "Farol · Diretoria", como código.
+#
+# O JSON (o serialized_space) é gerado por scripts/gerar_genie.py: as instruções de
+# negócio ficam no Git, com diff e revisão. O Genie só nasce se as tabelas e a metric
+# view já existem: do zero, a ordem é deploy → run → deploy.
+#
+# Não edite o Genie no workspace: o próximo deploy recusa ("modified remotely").
+
+resources:
+  genie_spaces:
+    genie_farol:
+      title: Farol · Diretoria
+      description: >-
+        Pergunte em português sobre os 60 projetos da Vértice Tecnologia: quais estão atrasados e de
+        quais clientes, quanto o atraso custa, quem está parado enquanto outro projeto pede gente e o
+        que vai dar errado no próximo mês (com o modelo de estouro em 30 dias).
+      file_path: ../resources/farol.geniespace.json
+      warehouse_id: ${var.warehouse_id}

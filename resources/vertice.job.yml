@@ -10,9 +10,10 @@
 #   ml_features          noite 4: as features do modelo (projeto × semana, só olhando para trás)
 #   ml_modelo            noite 4: baselines, treino, testes e o registro @prod no Unity Catalog
 #   ml_score             noite 4: a lista de segunda-feira (gold.score_estouro_30d, com os motivos)
+#   metricas_governadas  noite 4: a metric view gold.mv_projetos (a fórmula de cada KPI num lugar só)
 #
 # O DAG: as duas ingestões em paralelo → conferência → medalhão → testes e IA em paralelo
-#        → ml_features → ml_modelo → ml_score.
+#        → ml_features → ml_modelo → ml_score, e metricas_governadas em paralelo com o ML.
 
 resources:
   jobs:
@@ -120,3 +121,13 @@ resources:
             source: WORKSPACE
             base_parameters:
               catalog: ${var.catalog}
+
+        # ── noite 4 · a fórmula de cada KPI num lugar só ──────────────
+        - task_key: metricas_governadas
+          depends_on:
+            - task_key: testes_de_qualidade
+            - task_key: status_com_ia
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../src/metricas/metricas.sql

@@ -1,0 +1,127 @@
+{
+  "version": 2,
+  "config": {
+    "sample_questions": [
+      {
+        "id": "a1000000000000000000000000000001",
+        "question": [
+          "Quais projetos estão atrasados, e de quais clientes?"
+        ]
+      },
+      {
+        "id": "a1000000000000000000000000000002",
+        "question": [
+          "Quanto esse atraso vai me custar?"
+        ]
+      },
+      {
+        "id": "a1000000000000000000000000000003",
+        "question": [
+          "Tenho gente parada enquanto outro projeto pede gente?"
+        ]
+      },
+      {
+        "id": "a1000000000000000000000000000004",
+        "question": [
+          "O que vai dar errado no próximo mês, e o que eu faço agora?"
+        ]
+      }
+    ]
+  },
+  "data_sources": {
+    "tables": [
+      {
+        "identifier": "lakehouse_vertice.gold.fato_projeto_semana"
+      },
+      {
+        "identifier": "lakehouse_vertice.gold.projeto_situacao_atual"
+      },
+      {
+        "identifier": "lakehouse_vertice.gold.score_estouro_30d"
+      },
+      {
+        "identifier": "lakehouse_vertice.gold.status_estruturado"
+      },
+      {
+        "identifier": "lakehouse_vertice.gold.utilizacao_pessoa_semana"
+      },
+      {
+        "identifier": "lakehouse_vertice.silver.entregas_fornecedor"
+      }
+    ],
+    "metric_views": [
+      {
+        "identifier": "lakehouse_vertice.gold.mv_projetos"
+      }
+    ]
+  },
+  "instructions": {
+    "text_instructions": [
+      {
+        "id": "b1000000000000000000000000000001",
+        "content": [
+          "Quem pergunta é o dono da Vértice Tecnologia e a diretoria. Responda em português, direto, com números em reais e índices com 2 casas decimais.\n",
+          "HOJE é 2026-10-16 (sexta-feira). Nunca use current_date(). 'Últimos 90 dias' = data_status >= 2026-07-18. 'Últimas 12 semanas' = semana > 2026-07-24. 'Próximo mês' = os próximos 30 dias, até 2026-11-15.\n",
+          "Fórmulas: SPI = EV / PV (prazo) e CPI = EV / AC (custo). Abaixo de 1 é atraso ou estouro. Regras de corte: SPI ou CPI abaixo de 0,9 = atenção, abaixo de 0,8 = crítico. EAC = orçamento / CPI. Estouro previsto = EAC - orçamento, quando positivo.\n",
+          "Para totais e KPIs da carteira de HOJE (SPI, CPI, estouro previsto, margem, quantos projetos em risco, críticos ou melancias) use a metric view gold.mv_projetos com MEASURE(). Ela já filtra os projetos em andamento e calcula razão como soma dividida por soma, nunca média de razões.\n",
+          "Para listar, ordenar ou fazer ranking de projetos (o mais atrasado, o maior estouro, o maior atraso projetado) use gold.projeto_situacao_atual com status = 'em_andamento'. A coluna projeto_id é o código (PRJ-011).\n",
+          "Em gold.fato_projeto_semana, PV, EV e AC são ACUMULADOS até a semana: nunca some semanas diferentes do mesmo projeto. Para a evolução, leia a linha de cada semana. Para 'o SPI na semana X', filtre semana = X (as semanas são sextas-feiras).\n",
+          "Farol do gerente é o que ele publicou no status de sexta. Farol calculado é o da regra do manual (verde com SPI a partir de 0,95, amarelo a partir de 0,90). Melancia = projeto em andamento com farol do gerente verde e SPI abaixo de 0,9 (coluna melancia).\n",
+          "'Por que o projeto X atrasou?' responde com gold.status_estruturado dos últimos 90 dias, sem as causas sem_bloqueio e nao_reportado: a causa_bloqueio mais frequente, quantas semanas e a soma de dias_impacto. Junte o SPI e o CPI de hoje. Se a causa for falta_sre, mostre também os SREs ociosos (utilização abaixo de 20% nas últimas 12 semanas).\n",
+          "Gente parada = pessoa com utilização (soma das horas apontadas dividida pela soma das horas disponíveis) abaixo de 20% nas últimas 12 semanas, em gold.utilizacao_pessoa_semana. O papel vem em minúsculas (sre, dev_backend...).\n",
+          "Fornecedor que mais atrasa = maior média de prazo_real_dias / prazo_prometido_dias em silver.entregas_fornecedor. Entrega em atraso hoje = coluna em_atraso. A CodeForge Consultoria Ltda já vem com o nome normalizado.\n",
+          "'O que vai dar errado no próximo mês' junta TRÊS fontes, numa resposta só: (1) o modelo, gold.score_estouro_30d, com os projetos que hoje estão com situacao = 'ok' e faixa_risco alto ou medio, e os principais_fatores de cada um. Os que já estão em atenção ou crítico a regra de corte já vê, não são novidade. (2) As entregas de consultoria em atraso (em_atraso em silver.entregas_fornecedor). (3) O change freeze do varejo, de 01/11/2026 a 10/01/2027, que trava deploy nos projetos de e-commerce em andamento (tipo_projeto com commerce, checkout ou marketplace). Um projeto que aparece em mais de uma fonte merece destaque.\n",
+          "A probabilidade de estouro em 30 dias vem de gold.score_estouro_30d, na data_referencia mais recente. 1,0 significa que o projeto já está abaixo do corte hoje.\n",
+          "'Quais clientes' devolve cada cliente uma vez só (DISTINCT), mesmo que ele tenha mais de um projeto.\n"
+        ]
+      }
+    ],
+    "example_question_sqls": [
+      {
+        "id": "c1000000000000000000000000000001",
+        "question": [
+          "Quais projetos estão atrasados, e de quais clientes?"
+        ],
+        "sql": [
+          "SELECT projeto_id, nome_projeto, cliente, situacao, spi, cpi, estouro_previsto\nFROM lakehouse_vertice.gold.projeto_situacao_atual\nWHERE status = 'em_andamento' AND situacao IN ('crítico', 'atenção')\nORDER BY least(spi, cpi)"
+        ]
+      },
+      {
+        "id": "c1000000000000000000000000000002",
+        "question": [
+          "Quanto esse atraso vai me custar?"
+        ],
+        "sql": [
+          "SELECT MEASURE(estouro_previsto) AS estouro_previsto,\n       MEASURE(margem_projetada) AS margem_projetada,\n       MEASURE(projetos_em_risco) AS projetos_em_risco,\n       MEASURE(carteira) AS carteira\nFROM lakehouse_vertice.gold.mv_projetos"
+        ]
+      },
+      {
+        "id": "c1000000000000000000000000000003",
+        "question": [
+          "Tenho gente parada enquanto outro projeto pede gente?"
+        ],
+        "sql": [
+          "WITH parados AS (\n  SELECT colaborador_id, nome, papel, projeto_id,\n         SUM(horas_apontadas) / SUM(horas_disponiveis) AS utilizacao,\n         SUM(horas_ociosas) AS horas_paradas\n  FROM lakehouse_vertice.gold.utilizacao_pessoa_semana\n  WHERE semana > DATE'2026-07-24'\n  GROUP BY colaborador_id, nome, papel, projeto_id\n  HAVING SUM(horas_apontadas) / SUM(horas_disponiveis) < 0.2\n),\npedidos AS (\n  SELECT projeto_id, COUNT(*) AS semanas, SUM(coalesce(dias_impacto, 0)) AS dias_impacto\n  FROM lakehouse_vertice.gold.status_estruturado\n  WHERE data_status >= DATE'2026-07-18' AND causa_bloqueio = 'falta_sre'\n  GROUP BY projeto_id\n)\nSELECT 'parado' AS tipo, projeto_id, concat(colaborador_id, ' ', nome, ' (', papel, ')') AS quem,\n       concat(CAST(ROUND(utilizacao * 100, 1) AS STRING), '% de utilização, ', CAST(ROUND(horas_paradas) AS STRING), ' horas paradas') AS detalhe\nFROM parados\nUNION ALL\nSELECT 'pedindo SRE no status' AS tipo, projeto_id, 'falta de SRE' AS quem,\n       concat(CAST(semanas AS STRING), ' semanas, ', CAST(dias_impacto AS STRING), ' dias de impacto declarados') AS detalhe\nFROM pedidos"
+        ]
+      },
+      {
+        "id": "c1000000000000000000000000000004",
+        "question": [
+          "O que vai dar errado no próximo mês, e o que eu faço agora?"
+        ],
+        "sql": [
+          "SELECT 'modelo: risco de estouro em 30 dias' AS fonte, s.projeto_id, p.cliente,\n       concat(CAST(ROUND(s.prob_estouro_30d * 100) AS INT), '% de chance (', s.faixa_risco, ')') AS sinal,\n       s.principais_fatores AS detalhe\nFROM lakehouse_vertice.gold.score_estouro_30d s\nJOIN lakehouse_vertice.gold.projeto_situacao_atual p USING (projeto_id)\nWHERE s.data_referencia = (SELECT MAX(data_referencia) FROM lakehouse_vertice.gold.score_estouro_30d)\n  AND p.situacao = 'ok' AND s.faixa_risco IN ('alto', 'medio')\nUNION ALL\nSELECT 'entrega de consultoria em atraso' AS fonte, e.projeto_id, p.cliente,\n       concat(e.fornecedor, ': ', e.item) AS sinal,\n       concat('prometida para ', CAST(e.data_prometida AS STRING), ', ', CAST(datediff(DATE'2026-10-16', e.data_prometida) AS STRING), ' dias de atraso') AS detalhe\nFROM lakehouse_vertice.silver.entregas_fornecedor e\nJOIN lakehouse_vertice.gold.projeto_situacao_atual p USING (projeto_id)\nWHERE e.em_atraso\nUNION ALL\nSELECT 'change freeze da Black Friday (01/11/2026 a 10/01/2027)' AS fonte, projeto_id, cliente,\n       tipo_projeto AS sinal, 'deploy travado no varejo a partir de 01/11/2026' AS detalhe\nFROM lakehouse_vertice.gold.projeto_situacao_atual\nWHERE status = 'em_andamento'\n  AND (lower(tipo_projeto) LIKE '%commerce%' OR lower(tipo_projeto) LIKE '%checkout%' OR lower(tipo_projeto) LIKE '%marketplace%')"
+        ]
+      },
+      {
+        "id": "c1000000000000000000000000000005",
+        "question": [
+          "Qual a chance de o PRJ-024 estourar no próximo mês?"
+        ],
+        "sql": [
+          "SELECT s.projeto_id, ROUND(s.prob_estouro_30d, 2) AS prob_estouro_30d, s.faixa_risco, s.ranking,\n       s.principais_fatores, p.situacao, p.spi, p.cpi\nFROM lakehouse_vertice.gold.score_estouro_30d s\nJOIN lakehouse_vertice.gold.projeto_situacao_atual p USING (projeto_id)\nWHERE s.projeto_id = 'PRJ-024'\n  AND s.data_referencia = (SELECT MAX(data_referencia) FROM lakehouse_vertice.gold.score_estouro_30d)"
+        ]
+      }
+    ]
+  }
+}
